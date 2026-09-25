@@ -69,6 +69,8 @@ public class TpTask
     private const double MapDragFastStepRatio = 0.42d;
     private const double MapDragFastDistanceRatio = 0.85d;
     private const double MapClickSafeMargin = 35d;
+    private const double MapUiForbiddenAreaWidth = 360d;
+    private const double MapUiForbiddenAreaHeight = 430d;
     private const double NearbyMapIconPatternMinSearchRadius = 120d;
     private const double NearbyMapIconPatternMaxSearchRadius = 260d;
     private const double NearbyMapIconPatternNeighborDistanceRatio = 1.3d;
@@ -83,7 +85,6 @@ public class TpTask
     private const double AbsoluteMapClickNeighborErrorRatio = 0.25d;
     private const double NearbyMapIconTemplateThreshold = 0.65d;
     private const int MapChooseCandidateClickRetryCount = 2;
-    private const int MapChooseCandidateClickDelayMs = 150;  // 点击候选列表后，等待UI变化的时间
     private const int MapChooseCandidateClickVerificationDelayMs = 600;
     private const int MapChooseCandidateClickVerificationIntervalMs = 100;
     private const double TeleportFinalZoomMinNeighborScreenDistance = 96d;
@@ -1091,8 +1092,9 @@ public class TpTask
         var requiredRadius = Math.Max(0, requiredVisibleRadius);
         var edgeMargin = safeMargin + requiredRadius;
 
-        // 屏蔽左上角360x400区域；如果需要识别周围图标，则把目标点周围的可见半径也让出来。
-        if (clickX < 360 * _zoomOutMax1080PRatio + requiredRadius && clickY < 400 * _zoomOutMax1080PRatio + requiredRadius)
+        // 屏蔽左上角 UI 遮挡区域；如果需要识别周围图标，则把目标点周围的可见半径也让出来。
+        if (clickX < MapUiForbiddenAreaWidth * _zoomOutMax1080PRatio + requiredRadius
+            && clickY < MapUiForbiddenAreaHeight * _zoomOutMax1080PRatio + requiredRadius)
         {
             return false;
         }
@@ -1249,6 +1251,11 @@ public class TpTask
             catch (TeleportPanelNotOpenedException e)
             {
                 // 同一视野内点击后未出现面板，重试只会重复点击同一位置。
+                
+                // 抛出异常按下 ESC 退出大地图，避免影响后续路径追踪任务
+                Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                await Delay(300, ct);
+                
                 throw;
             }
             catch (TpPointNotActivate e)
@@ -1905,8 +1912,8 @@ public class TpTask
             double dragRatioByX = expectedDeltaX == 0 ? 1 : availableX / Math.Abs(expectedDeltaX);
             double dragRatioByY = expectedDeltaY == 0 ? 1 : availableY / Math.Abs(expectedDeltaY);
             double dragRatio = Math.Min(1, Math.Min(dragRatioByX, dragRatioByY));
-            double forbiddenWidth = 360d * scale;
-            double forbiddenHeight = 400d * scale;
+            double forbiddenWidth = MapUiForbiddenAreaWidth * scale;
+            double forbiddenHeight = MapUiForbiddenAreaHeight * scale;
             double avoidPadding = Math.Max(4d, 6d * scale);
 
             for (var attempt = 0; attempt < 12; attempt++)
@@ -1989,6 +1996,7 @@ public class TpTask
             }
         }
 
+        await Delay(60, ct);
         Simulation.SendInput.Mouse.LeftButtonUp();
         var endCursor = GetCursorPositionInCapture();
         return (sentDeltaX, sentDeltaY, steps, startX, startY, endX, endY, endCursor.X - startCursor.X, endCursor.Y - startCursor.Y);
@@ -2820,7 +2828,7 @@ public class TpTask
             return false;
         }
 
-        return !(x < 360 * _zoomOutMax1080PRatio && y < 400 * _zoomOutMax1080PRatio);
+        return !(x < MapUiForbiddenAreaWidth * _zoomOutMax1080PRatio && y < MapUiForbiddenAreaHeight * _zoomOutMax1080PRatio);
     }
 
     private double GetNearbyMapIconPatternSearchRadius(double nearestNeighborScreenDistance = double.NaN)
@@ -3498,9 +3506,12 @@ public class TpTask
 
     private async Task ClickMapChooseCandidate(ImageRegion imageRegion, MapChooseCandidate candidate)
     {
+        // 候选列表有个动画，识别到以后一定要再等一会点击
+        var time = TaskContext.Instance().Config.QuickTeleportConfig.TeleportListClickDelay;
+        await Delay(time < 200 ? 200 : time, ct);
         Logger.LogInformation("点击候选列表：{Text}", candidate.Text);
         imageRegion.ClickTo(candidate.ClickRect.X, candidate.ClickRect.Y, candidate.ClickRect.Width, candidate.ClickRect.Height);
-        await Delay(MapChooseCandidateClickDelayMs, ct);
+        await Delay(150, ct);
     }
 
     private static double GetDistance(double x1, double y1, double x2, double y2)
