@@ -323,6 +323,8 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
                 // 2. 执行战斗（战斗线程、视角线程、检测战斗完成线程）
                 Logger.LogInformation("自动秘境：{Text}", "2. 执行战斗策略");
                 await StartFight(combatScenes, combatCommands);
+                // 挑战结束会取消战斗令牌；战后切人改用外层任务令牌，仍响应用户停止任务。
+                combatScenes.BeforeTask(_ct);
                 combatScenes.AfterTask();
             }
             EndFightWait();
@@ -394,12 +396,13 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
         {
             await SelectDevelopmentGuideDestination();
         }
-        // 传送到秘境
-        if (!string.IsNullOrEmpty(_taskParam.DomainName))
+        // 传送与入口移动必须使用同一个实际秘境名，而不是提升指南选项的占位值。
+        var domainName = _guideDomainName ?? _taskParam.DomainName;
+        if (!string.IsNullOrEmpty(domainName))
         {
-            if (MapLazyAssets.Get().DomainPositionMap.TryGetValue(_guideDomainName ?? _taskParam.DomainName, out var domainPosition))
+            if (MapLazyAssets.Get().DomainPositionMap.TryGetValue(domainName, out var domainPosition))
             {
-                Logger.LogInformation("自动秘境：传送到秘境{Text}", _taskParam.DomainName);
+                Logger.LogInformation("自动秘境：传送到秘境{Text}", domainName);
                 await new TpTask(_ct).Tp(domainPosition.X, domainPosition.Y);
                 await Delay(1000, _ct);
                 await Bv.WaitForMainUi(_ct);
@@ -410,7 +413,7 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
                 {
                     pickAssets = AutoPickAssets.Get(gameCaptureRegion, TaskContext.Instance().Config.AutoPickConfig.PickKey);
                 }
-                if ("芬德尼尔之顶".Equals(_taskParam.DomainName))
+                if ("芬德尼尔之顶".Equals(domainName))
                 {
                     menuFound = await NewRetry.WaitForElementAppear(
                         pickAssets.PickRo,
@@ -421,7 +424,7 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
                     );
                     InputHub.Foreground.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
                 }
-                else if ("无妄引咎密宫".Equals(_taskParam.DomainName))
+                else if ("无妄引咎密宫".Equals(domainName))
                 {
                     InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
                     Thread.Sleep(500);
@@ -436,7 +439,7 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
                     );
                     InputHub.Foreground.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
                 }
-                else if ("太山府".Equals(_taskParam.DomainName))
+                else if ("太山府".Equals(domainName))
                 {
                     menuFound = await NewRetry.WaitForElementAppear(
                         pickAssets.PickRo,
@@ -466,8 +469,8 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
             }
             else
             {
-                Logger.LogError("自动秘境：未找到对应的秘境{Text}的传送点", _taskParam.DomainName);
-                throw new Exception($"未找到对应的秘境{_taskParam.DomainName}的传送点");
+                Logger.LogError("自动秘境：未找到对应的秘境{Text}的传送点", domainName);
+                throw new Exception($"未找到对应的秘境{domainName}的传送点");
             }
         }
     }

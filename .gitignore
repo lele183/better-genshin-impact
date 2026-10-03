@@ -41,6 +41,8 @@ github_actions_cache/
 *.zip
 
 # Rider
+/build-guide.log
+
 .idea
 
 __pycache__/
