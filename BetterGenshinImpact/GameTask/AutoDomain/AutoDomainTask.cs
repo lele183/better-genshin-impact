@@ -323,6 +323,8 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
                 // 2. 执行战斗（战斗线程、视角线程、检测战斗完成线程）
                 Logger.LogInformation("自动秘境：{Text}", "2. 执行战斗策略");
                 await StartFight(combatScenes, combatCommands);
+                // 挑战结束会取消战斗令牌；战后切人改用外层任务令牌，仍响应用户停止任务。
+                combatScenes.BeforeTask(_ct);
                 combatScenes.AfterTask();
             }
             EndFightWait();

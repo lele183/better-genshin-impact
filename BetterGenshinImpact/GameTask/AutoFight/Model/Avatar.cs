@@ -274,16 +274,17 @@ public class Avatar
 
     /// <summary>
     /// 切换到本角色
-    /// 切换cd是1秒，如果切换失败，会尝试再次切换，最多尝试5次
+    /// 切换cd是1秒，如果切换失败，会尝试再次切换，最多尝试30次
     /// </summary>
-    public void Switch()
+    /// <returns>识别确认本角色已出战时返回 true；取消或重试次数耗尽时返回 false</returns>
+    public bool Switch()
     {
         var context = new AvatarActiveCheckContext();
         for (var i = 0; i < 30; i++)
         {
             if (Ct is { IsCancellationRequested: true })
             {
-                return;
+                return false;
             }
 
             using var region = CaptureToRectArea();
@@ -296,7 +297,7 @@ public class Avatar
                 {
                     ESkillClassifyViewModel.Instance.Result = null;
                 }
-                return;
+                return true;
             }
 
             SimulateSwitchAction(Index);
@@ -311,6 +312,8 @@ public class Avatar
 
             Sleep(250, Ct);
         }
+
+        return false;
     }
 
     /// <summary>

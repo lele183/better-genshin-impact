@@ -484,18 +484,44 @@ public class CombatScenes : IDisposable
         // 释放所有按键
         InputHub.ReleaseAll();
 
-        var mwk = SelectAvatar("玛薇卡");
-        if (mwk != null)
+        // 战斗结束后若队伍中存在会让角色处于特殊移动状态的角色（玛薇卡骑车、薇斯纳飞行等），
+        // 切换到其他角色以退出该状态，避免后续步行领奖时角色失控飞走/冲出领奖区域
+        if (Avatars.Any(a => AfterTaskSwitchAwayAvatars.Contains(a.Name)))
         {
             foreach (var avatar in Avatars)
             {
-                if (avatar.Name != "玛薇卡")
+                // 只需切到任意一个普通角色即可退出特殊状态，首次确认成功后立即停止，
+                // 避免对后续角色发送多余的切换输入；重试耗尽时再尝试下一个，用户取消则停止收尾
+                if (AfterTaskSwitchAwayAvatars.Contains(avatar.Name))
                 {
-                    avatar.Switch();
+                    continue;
                 }
+
+                if (avatar.Ct.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                if (avatar.Switch())
+                {
+                    _logger.LogInformation("战斗收尾：已确认普通角色 {Name} 出战", avatar.Name);
+                    break;
+                }
+
+                if (avatar.Ct.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                _logger.LogWarning("战斗收尾：未能确认 {Name} 出战，尝试下一名普通角色", avatar.Name);
             }
         }
     }
+
+    /// <summary>
+    /// 战斗结束后需要切离的角色（处于载具/飞行等特殊移动状态，会影响后续步行操作）
+    /// </summary>
+    private static readonly HashSet<string> AfterTaskSwitchAwayAvatars = ["玛薇卡", "薇斯纳"];
 
     public Avatar? SelectAvatar(string name)
     {
